@@ -16,7 +16,7 @@
  *
  *************************************************************************
  *
- * @author Your Name <andrewid@andrew.cmu.edu>
+ * @author William Chen <wchen4@andrew.cmu.edu>
  */
 
 #include <assert.h>
@@ -105,39 +105,22 @@ static const word_t size_mask = ~(word_t)0xF;
 typedef struct block {
     /** @brief Header contains size + allocation flag */
     word_t header;
-
-    /**
-     * @brief A pointer to the block payload.
-     *
-     * TODO: feel free to delete this comment once you've read it carefully.
-     * We don't know what the size of the payload will be, so we will declare
-     * it as a zero-length array, which is a GCC compiler extension. This will
-     * allow us to obtain a pointer to the start of the payload.
-     *
-     * WARNING: A zero-length array must be the last element in a struct, so
-     * there should not be any struct fields after it. For this lab, we will
-     * allow you to include a zero-length array in a union, as long as the
-     * union is the last field in its containing struct. However, this is
-     * compiler-specific behavior and should be avoided in general.
-     *
-     * WARNING: DO NOT cast this pointer to/from other types! Instead, you
-     * should use a union to alias this zero-length array with another struct,
-     * in order to store additional types of data in the payload memory.
-     */
-    char payload[0];
-
-    /*
-     * TODO: delete or replace this comment once you've thought about it.
-     * Why can't we declare the block footer here as part of the struct?
-     * Why do we even have footers -- will the code work fine without them?
-     * which functions actually use the data contained in footers?
-     */
+    /** @brief A pointer to the block payload. */
+    union {
+        struct {
+            struct block *next;
+            struct block *prev;
+        };
+        char payload[0];
+    };
 } block_t;
 
 /* Global variables */
 
 /** @brief Pointer to first block in the heap */
 static block_t *heap_start = NULL;
+
+static block_t *root = NULL;
 
 /*
  *****************************************************************************
@@ -398,6 +381,10 @@ static block_t *find_prev(block_t *block) {
  */
 
 /******** The remaining content below are helper and debug routines ********/
+// insert an empty block into the explicitlist of free blocks.
+static void insert_free(block_t *root, block_t *block){
+    
+}
 
 /**
  * @brief
@@ -427,6 +414,28 @@ static block_t *coalesce_block(block_t *block) {
      * at the malloc code in CS:APP and K&R, which make heavy use of macros
      * and which we no longer consider to be good style.
      */
+    block_t *previous = find_prev(block);
+    block_t *next = find_next(block);
+
+    if (previous != NULL && !get_alloc(previous)) { // prev empty
+        if (next != NULL && !get_alloc(next)) {     // next empty
+            size_t size = get_size(previous) + get_size(block) + get_size(next);
+            block = previous;
+            write_block(block, size, false);
+        } else { // next occupied
+            size_t size = get_size(previous) + get_size(block);
+            block = previous;
+            write_block(block, size, false);
+        }
+    } else {                                    // prev occupied
+        if (next != NULL && !get_alloc(next)) { // next empty
+            size_t size = get_size(block) + get_size(next);
+            write_block(block, size, false);
+        } else {
+            size_t size = get_size(block);
+            write_block(block, size, false);
+        }
+    }
     return block;
 }
 
@@ -522,6 +531,13 @@ static block_t *find_fit(size_t asize) {
     return NULL; // no fit found
 }
 
+bool align_checker(block_t *temp, size_t alignment) {
+    if ((intptr_t)temp % 16 != alignment) {
+        return false;
+    }
+    return true;
+}
+
 /**
  * @brief
  *
@@ -534,18 +550,47 @@ static block_t *find_fit(size_t asize) {
  * @return
  */
 bool mm_checkheap(int line) {
-    /*
-     * TODO: Delete this comment!
-     *
-     * You will need to write the heap checker yourself.
-     * Please keep modularity in mind when you're writing the heap checker!
-     *
-     * As a filler: one guacamole is equal to 6.02214086 x 10**23 guacas.
-     * One might even call it...  the avocado's number.
-     *
-     * Internal use only: If you mix guacamole on your bibimbap,
-     * do you eat it with a pair of chopsticks, or with a spoon?
-     */
+    // check if heap exists
+    if (heap_start == NULL) {
+        printf("No heap, Line: %d", line);
+        return false;
+    }
+    // the remainder when the first element of the heap is divided by 16
+    size_t offset = (intptr_t)heap_start % 16;
+
+    // check if prologue exist
+    block_t *prologue = (block_t *)mem_heap_lo();
+    if (!get_alloc(prologue) || get_size(prologue) > 0) {
+        printf("No prologue, Line %d\n", line);
+        return false;
+    }
+    // check if prologue is aligned
+    if ((intptr_t)prologue%16!=(offset+8)%16){
+        printf("prologue not aligned, Line %d\n", line);
+        return false;
+    }
+    // check if epilogue exist
+    block_t *epilogue = (block_t *)mem_heap_hi();
+    if (!get_alloc(epilogue) || get_size(epilogue) > 0) {
+        printf("No epilogue, Line %d\n", line);
+        return false;
+    }
+    // check if epilogue is aligned
+    if ((intptr_t)epilogue%16!=offset){
+        printf("epilogue not aligned, Line %d\n", line);
+        return false;
+    }
+
+    block_t *temp = heap_start;
+
+    while (temp != epilogue) {
+        if (!align_checker(temp, offset)) {
+            return false;
+        }
+        temp = find_next(temp);
+    }
+    // check each block's address alignment, boundaries, header+footer,
+    // coalesced
 
     return true;
 }
