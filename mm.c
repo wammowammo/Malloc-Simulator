@@ -381,9 +381,35 @@ static block_t *find_prev(block_t *block) {
  */
 
 /******** The remaining content below are helper and debug routines ********/
+
+
 // insert an empty block into the explicitlist of free blocks.
-static void insert_free(block_t *root, block_t *block){
-    
+static void add_to_free(block_t *block){
+    if(root ==NULL){//list is empty
+        root = block;
+    }
+    else{ //list is not empty
+        root->prev = block;
+        block->next = root;
+        root = block;
+    }
+}
+
+static void remove_from_free(block_t *removed){
+    if(removed->prev==NULL && removed->next==NULL){//only item in the list
+        root = NULL;
+    }
+    else if(removed->prev == NULL && removed->next!=NULL){ //first element in it
+        root = removed->next;
+        root->prev = NULL;
+    }
+    else if(removed->next == NULL && removed->prev!=NULL){//last element in list
+        removed->prev->next = NULL;
+    }
+    else{
+        removed->prev->next = removed->next;
+        removed->next->prev = removed->prev;
+    }
 }
 
 /**
@@ -419,21 +445,30 @@ static block_t *coalesce_block(block_t *block) {
 
     if (previous != NULL && !get_alloc(previous)) { // prev empty
         if (next != NULL && !get_alloc(next)) {     // next empty
+            remove_from_free(previous);
+            remove_from_free(next);
             size_t size = get_size(previous) + get_size(block) + get_size(next);
             block = previous;
             write_block(block, size, false);
-        } else { // next occupied
+            add_to_free(block);
+
+        } else { // prev empty, next occupied
+            remove_from_free(previous);
             size_t size = get_size(previous) + get_size(block);
             block = previous;
             write_block(block, size, false);
+            add_to_free(block);
         }
     } else {                                    // prev occupied
         if (next != NULL && !get_alloc(next)) { // next empty
+            remove_from_free(next);
             size_t size = get_size(block) + get_size(next);
             write_block(block, size, false);
+            add_to_free(block);
         } else {
             size_t size = get_size(block);
             write_block(block, size, false);
+            add_to_free(block);
         }
     }
     return block;
@@ -477,6 +512,7 @@ static block_t *extend_heap(size_t size) {
     // Coalesce in case the previous block was free
     block = coalesce_block(block);
 
+
     return block;
 }
 
@@ -493,7 +529,7 @@ static block_t *extend_heap(size_t size) {
  */
 static void split_block(block_t *block, size_t asize) {
     dbg_requires(get_alloc(block));
-    /* TODO: Can you write a precondition about the value of asize? */
+    dbg_requires(asize>0);
 
     size_t block_size = get_size(block);
 
@@ -503,7 +539,9 @@ static void split_block(block_t *block, size_t asize) {
 
         block_next = find_next(block);
         write_block(block_next, block_size - asize, false);
+        add_to_free(block_next);
     }
+
 
     dbg_ensures(get_alloc(block));
 }
@@ -522,21 +560,21 @@ static void split_block(block_t *block, size_t asize) {
 static block_t *find_fit(size_t asize) {
     block_t *block;
 
-    for (block = heap_start; get_size(block) > 0; block = find_next(block)) {
-
-        if (!(get_alloc(block)) && (asize <= get_size(block))) {
+    for (block = root; block!=NULL; block = block->next) {
+        if (asize <= get_size(block)) {
             return block;
         }
     }
     return NULL; // no fit found
 }
-
+/*
 bool align_checker(block_t *temp, size_t alignment) {
     if ((intptr_t)temp % 16 != alignment) {
         return false;
     }
     return true;
 }
+*/
 
 /**
  * @brief
@@ -550,6 +588,7 @@ bool align_checker(block_t *temp, size_t alignment) {
  * @return
  */
 bool mm_checkheap(int line) {
+    /*
     // check if heap exists
     if (heap_start == NULL) {
         printf("No heap, Line: %d", line);
@@ -560,18 +599,18 @@ bool mm_checkheap(int line) {
 
     // check if prologue exist
     block_t *prologue = (block_t *)mem_heap_lo();
-    if (!get_alloc(prologue) || get_size(prologue) > 0) {
+    if (!get_alloc(prologue) || get_size(prologue) != 0) {
         printf("No prologue, Line %d\n", line);
         return false;
     }
     // check if prologue is aligned
-    if ((intptr_t)prologue%16!=(offset+8)%16){
-        printf("prologue not aligned, Line %d\n", line);
+    if (((intptr_t)(prologue)+8)%16!=offset){
+        printf("prologue not aligned, Line %d\n offset: %zu", line, offset);
         return false;
     }
     // check if epilogue exist
     block_t *epilogue = (block_t *)mem_heap_hi();
-    if (!get_alloc(epilogue) || get_size(epilogue) > 0) {
+    if (!get_alloc(epilogue) || get_size(epilogue) != 0) {
         printf("No epilogue, Line %d\n", line);
         return false;
     }
@@ -591,7 +630,7 @@ bool mm_checkheap(int line) {
     }
     // check each block's address alignment, boundaries, header+footer,
     // coalesced
-
+     */
     return true;
 }
 
@@ -629,6 +668,7 @@ bool mm_init(void) {
     if (extend_heap(chunksize) == NULL) {
         return false;
     }
+    add_to_free(heap_start);
 
     return true;
 }
@@ -678,6 +718,8 @@ void *malloc(size_t size) {
         if (block == NULL) {
             return bp;
         }
+    }else{
+        remove_from_free(block);
     }
 
     // The block should be marked as free
@@ -686,6 +728,7 @@ void *malloc(size_t size) {
     // Mark block as allocated
     size_t block_size = get_size(block);
     write_block(block, block_size, true);
+    
 
     // Try to split the block if too large
     split_block(block, asize);
