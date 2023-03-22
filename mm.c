@@ -120,7 +120,7 @@ typedef struct block {
 /** @brief Pointer to first block in the heap */
 static block_t *heap_start = NULL;
 
-static block_t *root = NULL;
+static block_t *root;
 
 /*
  *****************************************************************************
@@ -381,21 +381,52 @@ static block_t *find_prev(block_t *block) {
  */
 
 /******** The remaining content below are helper and debug routines ********/
+void print_list(void){
+    printf("FREELIST:\n");
+    if(root==NULL){
+        printf("empty free list\n");
+    }
+    else{
+        for(block_t * temp = root; temp!=NULL; temp = temp->next){
+            printf("address: %p size: %d allocated: %i\n", temp, (int)get_size(temp),get_alloc(temp));
+        }
+    }
+}
 
+
+void print_heap(void){
+    printf("HEAP:\n");
+    for (block_t *block = heap_start; get_size(block)>0; block = find_next(block)){
+        char *s;
+        if (get_alloc(block)){
+            s = "allocated";
+        }
+        else
+            s = "free";
+        printf("%s block at address %p, size %d\n", s, block, (int)get_size(block));
+    }
+}
 
 // insert an empty block into the explicitlist of free blocks.
 static void add_to_free(block_t *block){
+    //printf("Adding: %p\n", block);
     if(root ==NULL){//list is empty
         root = block;
+        block->next = NULL;
+        block->prev = NULL;
     }
     else{ //list is not empty
         root->prev = block;
         block->next = root;
+        block->prev = NULL;
         root = block;
     }
+    //print_heap();
+    //print_list();
 }
 
 static void remove_from_free(block_t *removed){
+    //printf("Removing: %p\n", removed);
     if(removed->prev==NULL && removed->next==NULL){//only item in the list
         root = NULL;
     }
@@ -406,10 +437,12 @@ static void remove_from_free(block_t *removed){
     else if(removed->next == NULL && removed->prev!=NULL){//last element in list
         removed->prev->next = NULL;
     }
-    else{
+    else{//if its in the middle of list
         removed->prev->next = removed->next;
         removed->next->prev = removed->prev;
     }
+    //print_heap();
+    //print_list();
 }
 
 /**
@@ -442,7 +475,7 @@ static block_t *coalesce_block(block_t *block) {
      */
     block_t *previous = find_prev(block);
     block_t *next = find_next(block);
-
+    
     if (previous != NULL && !get_alloc(previous)) { // prev empty
         if (next != NULL && !get_alloc(next)) {     // next empty
             remove_from_free(previous);
@@ -472,6 +505,7 @@ static block_t *coalesce_block(block_t *block) {
         }
     }
     return block;
+    
 }
 
 /**
@@ -647,6 +681,7 @@ bool mm_checkheap(int line) {
 bool mm_init(void) {
     // Create the initial empty heap
     word_t *start = (word_t *)(mem_sbrk(2 * wsize));
+    root = NULL;
 
     if (start == (void *)-1) {
         return false;
@@ -668,7 +703,7 @@ bool mm_init(void) {
     if (extend_heap(chunksize) == NULL) {
         return false;
     }
-    add_to_free(heap_start);
+    //add_to_free(heap_start);
 
     return true;
 }
@@ -718,8 +753,6 @@ void *malloc(size_t size) {
         if (block == NULL) {
             return bp;
         }
-    }else{
-        remove_from_free(block);
     }
 
     // The block should be marked as free
@@ -728,6 +761,7 @@ void *malloc(size_t size) {
     // Mark block as allocated
     size_t block_size = get_size(block);
     write_block(block, block_size, true);
+    remove_from_free(block);
     
 
     // Try to split the block if too large
