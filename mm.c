@@ -120,7 +120,9 @@ typedef struct block {
 /** @brief Pointer to first block in the heap */
 static block_t *heap_start = NULL;
 
-static block_t *root;
+static const size_t topval = 12;
+
+static block_t *seglist[topval];
 
 /*
  *****************************************************************************
@@ -381,58 +383,51 @@ static block_t *find_prev(block_t *block) {
  */
 
 /******** The remaining content below are helper and debug routines ********/
-void print_list(void){
-    printf("FREELIST:\n");
-    if(root==NULL){
-        printf("empty free list\n");
+
+//find the index in the seglist (take log base 2 of a number)
+static size_t find_root(size_t size){
+    if(size<=min_block_size){
+        return 0;
     }
     else{
-        for(block_t * temp = root; temp!=NULL; temp = temp->next){
-            printf("address: %p size: %d allocated: %i\n", temp, (int)get_size(temp),get_alloc(temp));
+        for(size_t i=1; i < topval-1; i++){
+            if(size < (min_block_size<<(i+1))){
+                return i;
+            }
         }
     }
+    return topval-1;
 }
 
-
-void print_heap(void){
-    printf("HEAP:\n");
-    for (block_t *block = heap_start; get_size(block)>0; block = find_next(block)){
-        char *s;
-        if (get_alloc(block)){
-            s = "allocated";
-        }
-        else
-            s = "free";
-        printf("%s block at address %p, size %d\n", s, block, (int)get_size(block));
-    }
-}
-
-// insert an empty block into the explicitlist of free blocks.
+// insert an empty block into the seglist
 static void add_to_free(block_t *block){
-    //printf("Adding: %p\n", block);
-    if(root ==NULL){//list is empty
-        root = block;
+
+    size_t blocksize = get_size(block);
+    size_t starter = find_root(blocksize);
+    if(seglist[starter] ==NULL){//if list is empty
+        seglist[starter] = block;
         block->next = NULL;
         block->prev = NULL;
     }
-    else{ //list is not empty
-        root->prev = block;
-        block->next = root;
+    else{ //if list is not empty
+        seglist[starter]->prev = block;
+        block->next = seglist[starter];
         block->prev = NULL;
-        root = block;
+        seglist[starter] = block;
     }
-    //print_heap();
-    //print_list();
 }
 
+//remove an element from the seglist
 static void remove_from_free(block_t *removed){
-    //printf("Removing: %p\n", removed);
-    if(removed->prev==NULL && removed->next==NULL){//only item in the list
-        root = NULL;
+    size_t blocksize = get_size(removed);
+    size_t starter = find_root(blocksize);
+    
+    if(removed->prev==NULL && removed->next==NULL){//its only item in the list
+        seglist[starter] = NULL;
     }
-    else if(removed->prev == NULL && removed->next!=NULL){ //first element in it
-        root = removed->next;
-        root->prev = NULL;
+    else if(removed->prev == NULL && removed->next!=NULL){ //if first element in it
+        seglist[starter] = removed->next;
+        seglist[starter]->prev = NULL;
     }
     else if(removed->next == NULL && removed->prev!=NULL){//last element in list
         removed->prev->next = NULL;
@@ -441,8 +436,6 @@ static void remove_from_free(block_t *removed){
         removed->prev->next = removed->next;
         removed->next->prev = removed->prev;
     }
-    //print_heap();
-    //print_list();
 }
 
 /**
@@ -457,22 +450,6 @@ static void remove_from_free(block_t *removed){
  * @return
  */
 static block_t *coalesce_block(block_t *block) {
-    /*
-     * TODO: delete or replace this comment once you're done.
-     *
-     * Before you start, it will be helpful to review the "Dynamic Memory
-     * Allocation: Basic" lecture, and especially the four coalescing
-     * cases that are described.
-     *
-     * The actual content of the function will probably involve a call to
-     * find_prev(), and multiple calls to write_block(). For examples of how
-     * to use write_block(), take a look at split_block().
-     *
-     * Please do not reference code from prior semesters for this, including
-     * old versions of the 213 website. We also discourage you from looking
-     * at the malloc code in CS:APP and K&R, which make heavy use of macros
-     * and which we no longer consider to be good style.
-     */
     block_t *previous = find_prev(block);
     block_t *next = find_next(block);
     
@@ -505,7 +482,6 @@ static block_t *coalesce_block(block_t *block) {
         }
     }
     return block;
-    
 }
 
 /**
@@ -593,13 +569,16 @@ static void split_block(block_t *block, size_t asize) {
  */
 static block_t *find_fit(size_t asize) {
     block_t *block;
+    size_t starter = find_root(asize);
 
-    for (block = root; block!=NULL; block = block->next) {
-        if (asize <= get_size(block)) {
-            return block;
+    for(size_t i=starter;i<topval;i++){
+        for(block=seglist[i]; block!=NULL; block=block->next){
+            if(asize<= get_size(block)){
+                return block;
+            }
         }
     }
-    return NULL; // no fit found
+    return NULL;
 }
 /*
 bool align_checker(block_t *temp, size_t alignment) {
@@ -681,7 +660,10 @@ bool mm_checkheap(int line) {
 bool mm_init(void) {
     // Create the initial empty heap
     word_t *start = (word_t *)(mem_sbrk(2 * wsize));
-    root = NULL;
+    
+    for(size_t i=0; i<topval;i++){
+        seglist[i] = NULL;
+    }
 
     if (start == (void *)-1) {
         return false;
