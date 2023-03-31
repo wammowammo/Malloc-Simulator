@@ -522,7 +522,7 @@ static block_t *coalesce_block(block_t *block) {
 static block_t *extend_heap(size_t size) {
     void *bp;
 
-    bool lastalloc = get_prev_alloc(mem_heap_hi() - 7);
+    //bool lastalloc = get_prev_alloc(mem_heap_hi() - 7);
 
     // Allocate an even number of words to maintain alignment
     size = round_up(size, dsize);
@@ -532,14 +532,16 @@ static block_t *extend_heap(size_t size) {
 
     // Initialize free block header/footer
     block_t *block = payload_to_header(bp);
+    bool lastalloc = get_alloc(block);
     write_block(block, size, false, lastalloc);
 
     // Create new epilogue header
     block_t *block_next = find_next(block);
+    // Epilogue prev_alloc bit automatically set to false
     write_epilogue(block_next);
 
     // Coalesce in case the previous block was free
-    // block = coalesce_block(block);
+    block = coalesce_block(block);
 
     return block;
 }
@@ -794,6 +796,9 @@ void *malloc(size_t size) {
     write_block(block, block_size, true, get_prev_alloc(block));
     remove_from_free(block);
 
+    block_t *nextb = find_next(block);
+    write_block(nextb, get_size(nextb), get_alloc(nextb), true);
+
     // Try to split the block if too large
     split_block(block, asize);
 
@@ -828,13 +833,15 @@ void free(void *bp) {
 
     // Mark the block as free
     write_block(block, size, false, get_prev_alloc(block));
-    // block_t *nextbb = find_next(block);
-    // write_block(nextbb, get_size(nextbb), get_alloc(nextbb), false);
+    block_t *nextbb = find_next(block);
+    write_block(nextbb, get_size(nextbb), get_alloc(nextbb), false);
 
     // Try to coalesce the block with its neighbors
     block = coalesce_block(block);
+
+    //
     block_t *nextb = find_next(block);
-    write_block(nextb, get_size(nextb), true, false);
+    write_block(nextb, get_size(nextb), get_alloc(nextb), false);
 
     dbg_ensures(mm_checkheap(__LINE__));
 }
