@@ -291,9 +291,13 @@ static size_t get_payload_size(block_t *block) {
 static bool extract_alloc(word_t word) {
     return (bool)(word & alloc_mask);
 }
+<<<<<<< HEAD
 
 // Returns the allocation status of the previous header value.
 static bool extract_prev_alloc(word_t word) {
+=======
+static bool prev_extract_alloc(word_t word) {
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     return (bool)((word & prev_alloc_mask) >> 1);
 }
 
@@ -305,9 +309,15 @@ static bool extract_prev_alloc(word_t word) {
 static bool get_alloc(block_t *block) {
     return extract_alloc(block->header);
 }
+<<<<<<< HEAD
 // Returns the allocation status of the previous block, based on its header.
 static bool get_prev_alloc(block_t *block) {
     return extract_prev_alloc(block->header);
+=======
+
+static bool get_prev_alloc(block_t *block) {
+    return prev_extract_alloc(block->header);
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 }
 
 /**
@@ -338,6 +348,15 @@ static void write_epilogue(block_t *block) {
 static void write_block(block_t *block, size_t size, bool alloc,
                         bool prevalloc) {
     dbg_requires(block != NULL);
+<<<<<<< HEAD
+=======
+    if (block == mem_heap_hi() - 7) {
+        word_t *epilogue = mem_heap_hi() - 7;
+        *epilogue = pack(0, alloc, prevalloc);
+        return;
+    }
+
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     dbg_requires(size > 0);
     block->header = pack(size, alloc, prevalloc);
     if (!alloc) {
@@ -408,6 +427,23 @@ static block_t *find_prev(block_t *block) {
 
 /******** The remaining content below are helper and debug routines ********/
 
+<<<<<<< HEAD
+=======
+void print_heap(void) {
+    printf("HEAP:\n");
+    for (block_t *block = heap_start; get_size(block) > 0;
+         block = find_next(block)) {
+        char *s;
+        if (get_alloc(block)) {
+            s = "allocated";
+        } else
+            s = "free";
+        printf("%s block at address %p, size %d, prevalloc %d\n", s, block,
+               (int)get_size(block), get_prev_alloc(block));
+    }
+}
+
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 // find the index in the seglist given a bytesize (take log base 2 of a number)
 static size_t find_root(size_t size) {
     if (size <= min_block_size) {
@@ -472,7 +508,9 @@ static void remove_from_free(block_t *removed) {
  * @return
  */
 static block_t *coalesce_block(block_t *block) {
+    size_t size = get_size(block);
     bool prevalloc = get_prev_alloc(block);
+<<<<<<< HEAD
     block_t *previous;
     block_t *next = find_next(block);
     if (!prevalloc) {
@@ -482,32 +520,25 @@ static block_t *coalesce_block(block_t *block) {
     if (!prevalloc && previous != NULL) { // prev empty
         size_t prevsize = get_size(previous);
         if (next != NULL && !get_alloc(next)) { // next empty
+=======
+    if (!prevalloc) {
+        block_t *previous = find_prev(block);
+        if (previous != NULL) {
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
             remove_from_free(previous);
-            remove_from_free(next);
-            size_t size = prevsize + currsize + get_size(next);
+            size += get_size(previous);
             block = previous;
-            write_block(block, size, false, get_prev_alloc(block));
-            add_to_free(block);
-
-        } else { // prev empty, next occupied
-            remove_from_free(previous);
-            size_t size = prevsize + currsize;
-            block = previous;
-            write_block(block, size, false, get_prev_alloc(block));
-            add_to_free(block);
-        }
-    } else {                                    // prev occupied
-        if (next != NULL && !get_alloc(next)) { // next empty
-            remove_from_free(next);
-            size_t size = currsize + get_size(next);
-            write_block(block, size, false, prevalloc);
-            add_to_free(block);
-        } else {
-            size_t size = currsize;
-            write_block(block, size, false, prevalloc);
-            add_to_free(block);
+            prevalloc = get_prev_alloc(block);
         }
     }
+    block_t *nextb = find_next(block);
+    if (!get_alloc(nextb)) {
+        if (nextb != NULL) {
+            remove_from_free(nextb);
+            size += get_size(nextb);
+        }
+    }
+    write_block(block, size, false, prevalloc);
     return block;
 }
 
@@ -525,6 +556,11 @@ static block_t *coalesce_block(block_t *block) {
 static block_t *extend_heap(size_t size) {
     void *bp;
 
+<<<<<<< HEAD
+=======
+    //bool lastalloc = get_prev_alloc(mem_heap_hi() - 7);
+
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     // Allocate an even number of words to maintain alignment
     size = round_up(size, dsize);
     if ((bp = mem_sbrk(size)) == (void *)-1) {
@@ -533,10 +569,16 @@ static block_t *extend_heap(size_t size) {
 
     // Initialize free block header/footer
     block_t *block = payload_to_header(bp);
+<<<<<<< HEAD
     write_block(block, size, false, get_prev_alloc(block));
+=======
+    bool lastalloc = get_alloc(block);
+    write_block(block, size, false, lastalloc);
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 
     // Create new epilogue header
     block_t *block_next = find_next(block);
+    // Epilogue prev_alloc bit automatically set to false
     write_epilogue(block_next);
 
     // Coalesce in case the previous block was free
@@ -559,9 +601,18 @@ static block_t *extend_heap(size_t size) {
 static void split_block(block_t *block, size_t asize) {
     dbg_requires(get_alloc(block));
     dbg_requires(asize > 0);
+<<<<<<< HEAD
 
     size_t block_size = get_size(block);
 
+=======
+    size_t block_size = get_size(block);
+    /*
+    if (asize < min_block_size) {
+        asize = min_block_size;
+    }
+    */
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     if ((block_size - asize) >= min_block_size) {
         block_t *block_next;
         write_block(block, asize, true, get_prev_alloc(block));
@@ -569,8 +620,17 @@ static void split_block(block_t *block, size_t asize) {
         block_next = find_next(block);
         write_block(block_next, block_size - asize, false, true);
         add_to_free(block_next);
+<<<<<<< HEAD
     }
 
+=======
+        block_t *nextb = find_next(block_next);
+
+        write_block(nextb, get_size(nextb), get_alloc(nextb), false);
+        return;
+    }
+    // write_block(nextb, get_size(nextb), get_alloc(nextb), true);
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     dbg_ensures(get_alloc(block));
 }
 
@@ -636,7 +696,7 @@ bool coalesce_checker(block_t *temp) {
 }
 
 /**
- * @brief
+ * @b rief
  *
  * checks various different things to ensure that the heap is valid.
  * <What are the function's arguments?>
@@ -647,6 +707,20 @@ bool coalesce_checker(block_t *temp) {
  * @return
  */
 bool mm_checkheap(int line) {
+<<<<<<< HEAD
+=======
+    return true;
+    block_t *epilogue = (block_t *)mem_heap_hi() - 7;
+    block_t *temp = heap_start;
+    while (temp != epilogue) {
+        if (!coalesce_checker(temp)) {
+            printf("miscoalesced, line %d\n", line);
+            return false;
+        }
+        temp = find_next(temp);
+    }
+    return true;
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 
     // check if prologue exist
     block_t *prologue = (block_t *)mem_heap_lo();
@@ -655,7 +729,11 @@ bool mm_checkheap(int line) {
         return false;
     }
     // check if epilogue exist
+<<<<<<< HEAD
     block_t *epilogue = (block_t *)mem_heap_hi();
+=======
+    // block_t *epilogue = (block_t *)mem_heap_hi()-7;
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     if (!get_alloc(epilogue) || get_size(epilogue) != 0) {
         printf("No epilogue, Line %d\n", line);
         return false;
@@ -776,6 +854,9 @@ void *malloc(size_t size) {
     write_block(block, block_size, true, get_prev_alloc(block));
     remove_from_free(block);
 
+    block_t *nextb = find_next(block);
+    write_block(nextb, get_size(nextb), get_alloc(nextb), true);
+
     // Try to split the block if too large
     split_block(block, asize);
     block_t *nextb = find_next(block);
@@ -813,9 +894,13 @@ void free(void *bp) {
 
     // Mark the block as free
     write_block(block, size, false, get_prev_alloc(block));
+    block_t *nextbb = find_next(block);
+    write_block(nextbb, get_size(nextbb), get_alloc(nextbb), false);
 
     // Try to coalesce the block with its neighbors
     block = coalesce_block(block);
+
+    //
     block_t *nextb = find_next(block);
     write_block(nextb, get_size(nextb), get_alloc(nextb), false);
 

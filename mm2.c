@@ -91,7 +91,11 @@ static const size_t min_block_size = 2 * dsize;
  * TODO: explain what chunksize is
  * (Must be divisible by dsize)
  */
+<<<<<<< HEAD
 static const size_t chunksize = (1 << 12);
+=======
+static const size_t chunksize = (1 << 13);
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 
 /**
  * TODO: explain what alloc_mask is
@@ -181,12 +185,21 @@ static size_t round_up(size_t size, size_t n) {
  * @return The packed value
  */
 
+<<<<<<< HEAD
 static word_t pack(size_t size, bool alloc, bool prev_alloc) {
     word_t word = size;
     if (alloc) {
         word |= alloc_mask;
     }
     if (prev_alloc) {
+=======
+static word_t pack(size_t size, bool alloc, bool prev_alloc){
+    word_t word = size;
+    if (alloc){
+        word |= alloc_mask;
+    }
+    if(prev_alloc){
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
         word |= prev_alloc_mask;
     }
     return word;
@@ -287,8 +300,13 @@ static size_t get_payload_size(block_t *block) {
 static bool extract_alloc(word_t word) {
     return (bool)(word & alloc_mask);
 }
+<<<<<<< HEAD
 static bool prev_extract_alloc(word_t word) {
     return (bool)((word & prev_alloc_mask) >> 1);
+=======
+static bool prev_extract_alloc(word_t word){
+    return (bool)((word & prev_alloc_mask)>>1);
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 }
 
 /**
@@ -300,7 +318,11 @@ static bool get_alloc(block_t *block) {
     return extract_alloc(block->header);
 }
 
+<<<<<<< HEAD
 static bool get_prev_alloc(block_t *block) {
+=======
+static bool get_prev_alloc(block_t *block){
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     return prev_extract_alloc(block->header);
 }
 
@@ -311,10 +333,17 @@ static bool get_prev_alloc(block_t *block) {
  *
  * @param[out] block The location to write the epilogue header
  */
+<<<<<<< HEAD
 static void write_epilogue(block_t *block) {
     dbg_requires(block != NULL);
     dbg_requires((char *)block == mem_heap_hi() - 7);
     block->header = pack(0, true, false);
+=======
+static void write_epilogue(block_t *block, bool prev_alloc) {
+    dbg_requires(block != NULL);
+    dbg_requires((char *)block == mem_heap_hi() - 7);
+    block->header = pack(0, true, prev_alloc);
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 }
 
 /**
@@ -329,6 +358,7 @@ static void write_epilogue(block_t *block) {
  * @param[in] size The size of the new block
  * @param[in] alloc The allocation status of the new block
  */
+<<<<<<< HEAD
 static void write_block(block_t *block, size_t size, bool alloc,
                         bool prevalloc) {
     dbg_requires(block != NULL);
@@ -337,6 +367,16 @@ static void write_block(block_t *block, size_t size, bool alloc,
     if (!alloc) {
         word_t *footerp = header_to_footer(block);
         *footerp = pack(size, alloc, prevalloc);
+=======
+static void write_block(block_t *block, size_t size, bool alloc) {
+    dbg_requires(block != NULL);
+    dbg_requires(size > 0);
+    bool prev_alloc = get_prev_alloc(block);
+    block->header = pack(size, alloc, prev_alloc);
+    if(!alloc){
+        word_t *footerp = header_to_footer(block);
+        *footerp = pack(size, alloc, prev_alloc);
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     }
 }
 
@@ -402,6 +442,7 @@ static block_t *find_prev(block_t *block) {
 
 /******** The remaining content below are helper and debug routines ********/
 
+<<<<<<< HEAD
 void print_heap(void) {
     printf("HEAP:\n");
     for (block_t *block = heap_start; get_size(block) > 0;
@@ -416,6 +457,23 @@ void print_heap(void) {
     }
 }
 
+=======
+void print_heap(void){
+    printf("HEAP:\n");
+    for (block_t *block = heap_start; get_size(block)>0; block = find_next(block)){
+        char *s;
+        if (get_alloc(block)){
+            s = "allocated";
+        }
+        else
+            s = "free";
+        printf("%s block at address %p, size %d, prevalloc %d\n", s, block, (int)get_size(block), get_prev_alloc(block));
+    }
+}
+
+
+
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 // find the index in the seglist given a bytesize (take log base 2 of a number)
 static size_t find_root(size_t size) {
     if (size <= min_block_size) {
@@ -498,7 +556,11 @@ static block_t *coalesce_block(block_t *block) {
             size += get_size(nextb);
         }
     }
+<<<<<<< HEAD
     write_block(block, size, false, prevalloc);
+=======
+    write_block(block, size, false);
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     return block;
 }
 
@@ -516,8 +578,11 @@ static block_t *coalesce_block(block_t *block) {
 static block_t *extend_heap(size_t size) {
     void *bp;
 
+<<<<<<< HEAD
     //bool lastalloc = get_prev_alloc(mem_heap_hi() - 7);
 
+=======
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     // Allocate an even number of words to maintain alignment
     size = round_up(size, dsize);
     if ((bp = mem_sbrk(size)) == (void *)-1) {
@@ -526,6 +591,7 @@ static block_t *extend_heap(size_t size) {
 
     // Initialize free block header/footer
     block_t *block = payload_to_header(bp);
+<<<<<<< HEAD
     bool lastalloc = get_alloc(block);
     write_block(block, size, false, lastalloc);
 
@@ -533,6 +599,13 @@ static block_t *extend_heap(size_t size) {
     block_t *block_next = find_next(block);
     // Epilogue prev_alloc bit automatically set to false
     write_epilogue(block_next);
+=======
+    write_block(block, size, false);
+
+    // Create new epilogue header
+    block_t *block_next = find_next(block);
+    write_epilogue(block_next, false);
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 
     // Coalesce in case the previous block was free
     block = coalesce_block(block);
@@ -554,6 +627,7 @@ static block_t *extend_heap(size_t size) {
 static void split_block(block_t *block, size_t asize) {
     dbg_requires(get_alloc(block));
     dbg_requires(asize > 0);
+<<<<<<< HEAD
     size_t block_size = get_size(block);
     /*
     if (asize < min_block_size) {
@@ -573,6 +647,20 @@ static void split_block(block_t *block, size_t asize) {
         return;
     }
     // write_block(nextb, get_size(nextb), get_alloc(nextb), true);
+=======
+
+    size_t block_size = get_size(block);
+
+    if ((block_size - asize) >= min_block_size) {
+        block_t *block_next;
+        write_block(block, asize, true);
+
+        block_next = find_next(block);
+        write_block(block_next, block_size - asize, false);
+        add_to_free(block_next);
+    }
+
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     dbg_ensures(get_alloc(block));
 }
 
@@ -638,7 +726,11 @@ bool coalesce_checker(block_t *temp) {
 }
 
 /**
+<<<<<<< HEAD
  * @b rief
+=======
+ * @brief
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
  *
  * checks various different things to ensure that the heap is valid.
  * <What are the function's arguments?>
@@ -650,6 +742,7 @@ bool coalesce_checker(block_t *temp) {
  */
 bool mm_checkheap(int line) {
     return true;
+<<<<<<< HEAD
     block_t *epilogue = (block_t *)mem_heap_hi() - 7;
     block_t *temp = heap_start;
     while (temp != epilogue) {
@@ -660,6 +753,8 @@ bool mm_checkheap(int line) {
         temp = find_next(temp);
     }
     return true;
+=======
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 
     // check if prologue exist
     block_t *prologue = (block_t *)mem_heap_lo();
@@ -668,14 +763,21 @@ bool mm_checkheap(int line) {
         return false;
     }
     // check if epilogue exist
+<<<<<<< HEAD
     // block_t *epilogue = (block_t *)mem_heap_hi()-7;
+=======
+    block_t *epilogue = (block_t *)mem_heap_hi();
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     if (!get_alloc(epilogue) || get_size(epilogue) != 0) {
         printf("No epilogue, Line %d\n", line);
         return false;
     }
 
     // loop thru the heap to check for various things
+<<<<<<< HEAD
     /*
+=======
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     block_t *temp = heap_start;
     while (temp != epilogue) {
         if (!align_checker(temp)) {
@@ -695,7 +797,11 @@ bool mm_checkheap(int line) {
             return false;
         }
         temp = find_next(temp);
+<<<<<<< HEAD
     }*/
+=======
+    }
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     return true;
 }
 
@@ -722,7 +828,11 @@ bool mm_init(void) {
     }
 
     start[0] = pack(0, true, false); // Heap prologue (block footer)
+<<<<<<< HEAD
     start[1] = pack(0, true, true);  // Heap epilogue (block header)
+=======
+    start[1] = pack(0, true, true); // Heap epilogue (block header)
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 
     // Heap starts with first "block header", currently the epilogue
     heap_start = (block_t *)&(start[1]);
@@ -787,12 +897,18 @@ void *malloc(size_t size) {
 
     // Mark block as allocated
     size_t block_size = get_size(block);
+<<<<<<< HEAD
     write_block(block, block_size, true, get_prev_alloc(block));
     remove_from_free(block);
 
     block_t *nextb = find_next(block);
     write_block(nextb, get_size(nextb), get_alloc(nextb), true);
 
+=======
+    write_block(block, block_size, true);
+    remove_from_free(block);
+
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     // Try to split the block if too large
     split_block(block, asize);
 
@@ -826,17 +942,24 @@ void free(void *bp) {
     dbg_assert(get_alloc(block));
 
     // Mark the block as free
+<<<<<<< HEAD
     write_block(block, size, false, get_prev_alloc(block));
     block_t *nextbb = find_next(block);
     write_block(nextbb, get_size(nextbb), get_alloc(nextbb), false);
+=======
+    write_block(block, size, false);
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
 
     // Try to coalesce the block with its neighbors
     block = coalesce_block(block);
 
+<<<<<<< HEAD
     //
     block_t *nextb = find_next(block);
     write_block(nextb, get_size(nextb), get_alloc(nextb), false);
 
+=======
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
     dbg_ensures(mm_checkheap(__LINE__));
 }
 
@@ -939,4 +1062,9 @@ void *calloc(size_t elements, size_t size) {
  * 68 21 20 2d 44 72 2e 20 45 76 69 6c 0a c5 7c fc 80 6e 57 0a               *
  *                                                                           *
  *****************************************************************************
+<<<<<<< HEAD
  */
+=======
+ */
+
+>>>>>>> 489ff2b5c386213f9fa73512d7c738723b1856e9
